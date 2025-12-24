@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待办日历</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar">
+      <div class="drag-region">
+        <span class="app-title">待办日历</span>
+      </div>
+      <div class="window-controls">
+        <button class="win-btn" id="winMin">─</button>
+        <button class="win-btn" id="winMax">□</button>
+        <button class="win-btn close" id="winClose">×</button>
+      </div>
+    </header>
+    
+    <div class="toolbar">
+      <div class="tool-group">
+        <div class="date-picker-trigger" id="dateTrigger">
+           <span id="currentDateDisplay">Loading...</span>
+           <span class="dropdown-icon">▼</span>
+        </div>
+      </div>
+      
+      <div class="tool-group right">
+        <label class="switch-btn" title="挂在桌面">
+          <input type="checkbox" id="widgetToggle">
+          <span class="slider">挂在桌面</span>
+        </label>
+        <div class="divider-v"></div>
+        <button id="btnExport" class="icon-btn" title="导出">📤</button>
+        <button id="btnImport" class="icon-btn" title="导入">📥</button>
+      </div>
+    </div>
+
+    <main class="content">
+      <!-- Calendar Popup -->
+      <div id="calendarPopup" class="calendar-popup" style="display: none;">
+        <div class="calendar-header">
+           <select id="calYear" class="cal-select"></select>
+           <select id="calMonth" class="cal-select"></select>
+           <label class="range-toggle" title="开启后可选择起始和结束日期">
+             <input type="checkbox" id="rangeSelectMode"> 范围
+           </label>
+        </div>
+        <div class="weekdays">
+          <div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div>六</div><div>日</div>
+        </div>
+        <div id="calendarGrid" class="grid"></div>
+      </div>
+      
+      <section class="todos">
+        <!-- List Controls: Filter & Actions -->
+        <div class="list-controls">
+          <div class="filter-group">
+            <select id="filterPriority">
+              <option value="all">全部优先级</option>
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+            <div class="custom-select" id="tagFilter">
+              <div class="select-trigger" id="tagFilterTrigger">筛选标签</div>
+              <div class="select-options" id="tagFilterOptions"></div>
+            </div>
+          </div>
+          <div class="action-group">
+            <button id="viewToggle" class="text-btn">已完成</button>
+            <button id="selectAll" class="text-btn" title="全选">全选</button>
+            <button id="deleteSelected" class="text-btn danger" title="删除选中">删除</button>
+          </div>
+        </div>
+
+        <ul id="todoList" class="todo-list"></ul>
+      
+      <!-- Bottom Area -->
+      <div class="bottom-area">
+         <button id="fabAdd" class="fab-btn" title="添加待办">＋</button>
+      </div>
+    </main>
+
+    <!-- Edit/Add Modal -->
+    <div id="todoModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">添加待办</h3>
+          <button id="modalClose" class="close-btn">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <input id="editTitle" class="form-input large" placeholder="待办事项标题" />
+          </div>
+          <div class="form-group">
+            <textarea id="editDescription" class="form-input" rows="5" placeholder="详细描述..."></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+            <label>开始日期</label>
+            <input id="editDate" type="date" class="form-input">
+          </div>
+          <div class="form-group">
+            <label>结束日期 (可选)</label>
+            <input id="editEndDate" type="date" class="form-input" placeholder="留空则为单日">
+          </div>
+          <div class="form-group">
+            <label>优先级</label>
+              <select id="editPriority" class="form-input">
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>重复</label>
+              <select id="editRecurrence" class="form-input">
+                <option value="none">不重复</option>
+                <option value="daily">每天</option>
+                <option value="weekly">每周</option>
+                <option value="monthly">每月</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>标签</label>
+              <input id="editTags" class="form-input" placeholder="标签 (逗号分隔)">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="modalSave" class="primary-btn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="renderer.js"></script>
+</body>
+</html>

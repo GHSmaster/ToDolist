@@ -1,0 +1,46 @@
+{
+  "name": "todo-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "author": "User",
+  "description": "Windows Todo app with calendar and desktop widget",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.todolist.app",
+    "productName": "待办日历",
+    "directories": {
+      "output": "dist-portable"
+    },
+    "asar": true,
+    "files": [
+      "**/*",
+      "!dist-*/**/*",
+      "!node_modules/**/*",
+      "!builder-cache/**/*",
+      "!.vscode/**/*",
+      "!.idea/**/*"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "resources/icon.ico"
+    },
+    "portable": {
+      "artifactName": "待办日历_Portable.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "待办日历"
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  }
+}

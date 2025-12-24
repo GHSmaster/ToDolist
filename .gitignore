@@ -1,0 +1,10 @@
+node_modules/
+dist*/
+*.log
+*.json
+!package.json
+!package-lock.json
+!src/**/*.json
+.vscode/
+.idea/
+todos-export.json

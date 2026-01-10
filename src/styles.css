@@ -29,6 +29,36 @@ body {
   box-sizing: border-box;
 }
 
+/* Global Checkbox Style */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  outline: none;
+  cursor: pointer;
+  background-color: transparent;
+  vertical-align: middle;
+  position: relative;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+  background-size: 70%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--accent);
+}
+
 .app {
   display: flex;
   flex-direction: column;
@@ -176,7 +206,7 @@ body {
   margin-left: 4px;
 }
 .range-toggle input {
-  accent-color: var(--accent);
+  /* accent-color removed, using global style */
   cursor: pointer;
 }
 
@@ -580,6 +610,47 @@ textarea.form-input {
 .text-btn.danger { color: var(--danger); }
 .text-btn.danger:hover { background: rgba(226, 90, 90, 0.1); }
 
+/* Small Icon Button for Batch Actions */
+.icon-btn-small {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.icon-btn-small:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.icon-btn-small.danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Status Select */
+.status-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0 8px;
+  height: 25px;
+  border-radius: 4px;
+  font-size: 12px;
+  width: 90px;
+}
+.status-select option {
+  background: var(--panel);
+  color: var(--text);
+}
+
 /* Custom Select Dropdown */
 .custom-select {
   position: relative;
@@ -639,9 +710,22 @@ textarea.form-input {
   margin: 0;
   width: 13px;
   height: 13px;
-  accent-color: var(--accent);
+  /* accent-color removed, using global style */
   cursor: pointer;
   vertical-align: middle;
+}
+
+.select-option input[type="checkbox"]:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z'/%3E%3C/svg%3E");
+  background-size: 70%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.select-option input[type="checkbox"]:hover {
+  border-color: var(--accent);
 }
 
 /* Widget Mode - Auto Transparency */
@@ -699,10 +783,17 @@ textarea.form-input {
 .widget-mode .filter-group select,
 .widget-mode .filter-group input,
 .widget-mode .text-btn,
-.widget-mode .select-trigger {
+.widget-mode .select-trigger,
+.widget-mode .icon-btn-small {
   background: rgba(0, 0, 0, 0.2);
   border-color: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.8);
+}
+
+.widget-mode .icon-btn-small.danger {
+  color: var(--danger);
+  background: rgba(226, 90, 90, 0.1);
+  border-color: rgba(226, 90, 90, 0.2);
 }
 
 .widget-mode .win-btn:hover,
@@ -728,7 +819,104 @@ textarea.form-input {
   color: var(--success);
 }
 
-/* Scrollbar */
+/* Subtasks Edit Mode (Dynamic List) */
+.subtask-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.subtask-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.subtask-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--muted);
+  border-radius: 50%; /* Circle checkbox */
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.subtask-checkbox:hover { border-color: var(--accent); }
+.subtask-checkbox.checked {
+  background: var(--muted);
+  border-color: var(--muted);
+}
+
+.subtask-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 13px;
+  padding: 4px;
+  outline: none;
+  min-width: 0;
+}
+.subtask-input:focus {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.subtask-del-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.subtask-del-btn:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+/* Todo Item Subtasks Display */
+.todo-subtasks {
+  margin-top: 6px;
+  padding-left: 0;
+  list-style: none;
+}
+.todo-subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Increased gap */
+  font-size: 12px;
+  color: var(--text);
+  padding: 4px 0; /* Increased padding */
+  cursor: pointer;
+}
+.todo-subtask-item:hover { opacity: 0.8; }
+.todo-subtask-item.done {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.subtask-bullet {
+  width: 8px; /* Slightly larger */
+  height: 8px;
+  border: 1px solid var(--muted);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.todo-subtask-item.done .subtask-bullet {
+  background: var(--muted);
+}
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }

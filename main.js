@@ -30,6 +30,47 @@ function writeData(data) {
   fs.writeFileSync(dataFilePath, JSON.stringify(data), 'utf-8')
 }
 
+function migrateRecurringTodos() {
+  const data = readData()
+  let changed = false
+  
+  // Group potential chains by title+recurrence to assign IDs if missing
+  const groups = {}
+  
+  data.todos.forEach(t => {
+    if (t.recurrence && t.recurrence !== 'none') {
+      // Add 'cycle' tag if missing
+      if (!Array.isArray(t.tags)) t.tags = []
+      if (!t.tags.includes('cycle')) {
+        t.tags.push('cycle')
+        changed = true
+      }
+      
+      // Check recurrenceId
+      if (!t.recurrenceId) {
+        const key = `${t.title}|${t.recurrence}`
+        if (!groups[key]) groups[key] = []
+        groups[key].push(t)
+      }
+    }
+  })
+  
+  // Assign new recurrence IDs to grouped items
+  for (const key in groups) {
+    const group = groups[key]
+    const newRecId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-rec`
+    group.forEach(t => {
+      t.recurrenceId = newRecId
+      changed = true
+    })
+  }
+  
+  if (changed) {
+    writeData(data)
+    console.log('Migrated recurring todos with IDs and tags')
+  }
+}
+
 function createTray() {
   // Use a simple icon or generate one. For now we assume a default icon or no icon (it might show empty space on windows if no icon provided)
   // In a real app, we should provide a path to an icon file.
@@ -140,6 +181,7 @@ app.whenReady().then(() => {
   // Windows usually requires an icon.
   
   ensureDataFile()
+  migrateRecurringTodos()
   createWindow()
   
   try {
@@ -169,15 +211,30 @@ ipcMain.handle('add-todos', (_, items) => {
   const now = Date.now()
   for (const item of items) {
     const id = `${now}-${Math.random().toString(36).slice(2, 8)}`
+    
+    // Auto-add cycle tag for recurring tasks
+    let tags = Array.isArray(item.tags) ? item.tags : []
+    let recurrenceId = item.recurrenceId // Allow passing it if projection
+    
+    if (item.recurrence && item.recurrence !== 'none') {
+        if (!tags.includes('cycle')) tags.push('cycle')
+        if (!recurrenceId) {
+            recurrenceId = `${now}-${Math.random().toString(36).slice(2, 8)}-rec`
+        }
+    }
+    
     data.todos.push({
       id,
       title: String(item.title || '').trim(),
       date: String(item.date || '').trim(),
       priority: item.priority || 'medium',
       recurrence: item.recurrence || 'none',
-      tags: Array.isArray(item.tags) ? item.tags : [],
+      recurrenceId,
+      tags,
       description: String(item.description || ''),
       done: false,
+      endDate: item.endDate || '', // Ensure endDate is saved
+      subtasks: (item.subtasks || []).map(s => ({ ...s, done: false })),
       createdAt: now
     })
   }
@@ -187,9 +244,56 @@ ipcMain.handle('add-todos', (_, items) => {
 
 ipcMain.handle('update-todo', (_, updatedItem) => {
   const data = readData()
-  const idx = data.todos.findIndex(t => t.id === updatedItem.id)
-  if (idx >= 0) {
-    data.todos[idx] = { ...data.todos[idx], ...updatedItem }
+  const targetIdx = data.todos.findIndex(t => t.id === updatedItem.id)
+  
+  if (targetIdx >= 0) {
+    const target = data.todos[targetIdx]
+    
+    // Check if we need to propagate changes
+    // Only if recurrenceId exists
+    if (target.recurrenceId) {
+        // Identify shared fields that should be synced
+        // title, description, priority, recurrence, tags, endDate
+        // Independent: id, date, done, subtasks, createdAt
+        
+        // Ensure 'cycle' tag is present if still recurring
+        let newTags = updatedItem.tags !== undefined ? updatedItem.tags : target.tags
+        if (updatedItem.recurrence && updatedItem.recurrence !== 'none') {
+            if (!newTags) newTags = []
+            if (!newTags.includes('cycle')) newTags = [...newTags, 'cycle']
+        }
+        
+        const updates = {}
+        if (updatedItem.title !== undefined) updates.title = updatedItem.title
+        if (updatedItem.description !== undefined) updates.description = updatedItem.description
+        if (updatedItem.priority !== undefined) updates.priority = updatedItem.priority
+        if (updatedItem.recurrence !== undefined) updates.recurrence = updatedItem.recurrence
+        if (updatedItem.endDate !== undefined) updates.endDate = updatedItem.endDate
+        updates.tags = newTags
+        
+        // Apply to all in chain
+        data.todos.forEach((t, i) => {
+            if (t.recurrenceId === target.recurrenceId) {
+                data.todos[i] = { ...t, ...updates }
+            }
+        })
+        
+        // Now apply specific updates (like date or subtasks) to the target item ONLY
+        // Re-read target from array as it might have been updated by above loop
+        const refreshedTarget = data.todos[targetIdx]
+        data.todos[targetIdx] = { ...refreshedTarget, ...updatedItem }
+        
+    } else {
+        // Not currently recurrent. Did it BECOME recurrent?
+        if (updatedItem.recurrence && updatedItem.recurrence !== 'none') {
+            updatedItem.recurrenceId = `${Date.now()}-${Math.random().toString(36).slice(2,8)}-rec`
+            if (!updatedItem.tags) updatedItem.tags = []
+            if (!updatedItem.tags.includes('cycle')) updatedItem.tags.push('cycle')
+        }
+        
+        data.todos[targetIdx] = { ...target, ...updatedItem }
+    }
+    
     writeData(data)
   }
   return data
@@ -197,43 +301,109 @@ ipcMain.handle('update-todo', (_, updatedItem) => {
 
 ipcMain.handle('delete-todos', (_, ids) => {
   const data = readData()
-  const set = new Set(ids)
-  data.todos = data.todos.filter(t => !set.has(t.id))
+  const idsToDelete = new Set(ids)
+  const recurrenceIdsToDelete = new Set()
+
+  // Identify recurrence chains to delete
+  data.todos.forEach(t => {
+    if (idsToDelete.has(t.id) && t.recurrenceId) {
+      recurrenceIdsToDelete.add(t.recurrenceId)
+    }
+  })
+
+  data.todos = data.todos.filter(t => {
+    if (idsToDelete.has(t.id)) return false
+    if (t.recurrenceId && recurrenceIdsToDelete.has(t.recurrenceId)) return false
+    return true
+  })
+  
   writeData(data)
   return data
 })
+
+function handleRecurrence(todo, data) {
+  if (todo.recurrence && todo.recurrence !== 'none' && !todo.done) {
+    const [py, pm, pd] = todo.date.split('-').map(Number)
+    const nextDate = new Date(py, pm - 1, pd)
+    
+    if (todo.recurrence === 'daily') nextDate.setDate(nextDate.getDate() + 1)
+    else if (todo.recurrence === 'workdays') {
+      do {
+        nextDate.setDate(nextDate.getDate() + 1)
+      } while (nextDate.getDay() === 0 || nextDate.getDay() === 6)
+    }
+    else if (todo.recurrence === 'weekly') nextDate.setDate(nextDate.getDate() + 7)
+    else if (todo.recurrence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1)
+    else if (todo.recurrence === 'yearly') nextDate.setFullYear(nextDate.getFullYear() + 1)
+    
+    const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const y = nextDate.getFullYear()
+    const m = String(nextDate.getMonth() + 1).padStart(2, '0')
+    const d = String(nextDate.getDate()).padStart(2, '0')
+    
+    // Check if a future task already exists to prevent duplication
+    const existingFutureTask = data.todos.find(t => 
+      t.title === todo.title && 
+      t.date === `${y}-${m}-${d}` && 
+      t.recurrence === todo.recurrence
+    )
+    
+    if (!existingFutureTask) {
+      data.todos.push({
+        ...todo,
+        id: newId,
+        date: `${y}-${m}-${d}`,
+        done: false,
+        recurrenceId: todo.recurrenceId, // Preserve chain link
+        subtasks: (todo.subtasks || []).map(s => ({ ...s, done: false })),
+        createdAt: Date.now()
+      })
+    }
+  }
+}
 
 ipcMain.handle('toggle-done', (_, id) => {
   const data = readData()
   const idx = data.todos.findIndex(t => t.id === id)
   if (idx >= 0) {
     const todo = data.todos[idx]
-    if (todo.recurrence && todo.recurrence !== 'none' && !todo.done) {
-      // Handle recurrence logic upon completion
-      const [py, pm, pd] = todo.date.split('-').map(Number)
-      const nextDate = new Date(py, pm - 1, pd)
-      
-      if (todo.recurrence === 'daily') nextDate.setDate(nextDate.getDate() + 1)
-      else if (todo.recurrence === 'weekly') nextDate.setDate(nextDate.getDate() + 7)
-      else if (todo.recurrence === 'monthly') nextDate.setMonth(nextDate.getMonth() + 1)
-      else if (todo.recurrence === 'yearly') nextDate.setFullYear(nextDate.getFullYear() + 1)
-      
-      const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-      const y = nextDate.getFullYear()
-      const m = String(nextDate.getMonth() + 1).padStart(2, '0')
-      const d = String(nextDate.getDate()).padStart(2, '0')
-      
-      data.todos.push({
-        ...todo,
-        id: newId,
-        date: `${y}-${m}-${d}`,
-        done: false,
-        createdAt: Date.now()
-      })
-    }
+    handleRecurrence(todo, data)
     data.todos[idx].done = !data.todos[idx].done
     writeData(data)
   }
+  return data
+})
+
+ipcMain.handle('batch-complete-todos', (_, ids) => {
+  const data = readData()
+  const set = new Set(ids)
+  let changed = false
+  
+  data.todos.forEach(todo => {
+    if (set.has(todo.id) && !todo.done) {
+      handleRecurrence(todo, data)
+      todo.done = true
+      changed = true
+    }
+  })
+  
+  if (changed) writeData(data)
+  return data
+})
+
+ipcMain.handle('batch-restore-todos', (_, ids) => {
+  const data = readData()
+  const set = new Set(ids)
+  let changed = false
+  
+  data.todos.forEach(todo => {
+    if (set.has(todo.id) && todo.done) {
+      todo.done = false
+      changed = true
+    }
+  })
+  
+  if (changed) writeData(data)
   return data
 })
 

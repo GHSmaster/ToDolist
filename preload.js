@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('api', {
   addTodos: items => ipcRenderer.invoke('add-todos', items),
   updateTodo: item => ipcRenderer.invoke('update-todo', item),
   deleteTodos: ids => ipcRenderer.invoke('delete-todos', ids),
+  batchComplete: ids => ipcRenderer.invoke('batch-complete-todos', ids),
+  batchRestore: ids => ipcRenderer.invoke('batch-restore-todos', ids),
   toggleDone: id => ipcRenderer.invoke('toggle-done', id),
   setWidgetMode: enabled => ipcRenderer.invoke('set-widget-mode', enabled),
   windowControl: action => ipcRenderer.invoke('window-control', action),

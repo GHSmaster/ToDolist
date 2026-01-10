@@ -69,11 +69,16 @@
               <div class="select-trigger" id="tagFilterTrigger">筛选标签</div>
               <div class="select-options" id="tagFilterOptions"></div>
             </div>
+            <select id="filterStatus" class="status-select">
+              <option value="active">未完成</option>
+              <option value="completed">已完成</option>
+            </select>
           </div>
           <div class="action-group">
-            <button id="viewToggle" class="text-btn">已完成</button>
             <button id="selectAll" class="text-btn" title="全选">全选</button>
-            <button id="deleteSelected" class="text-btn danger" title="删除选中">删除</button>
+            <button id="batchComplete" class="icon-btn-small" title="批量完成">✓</button>
+            <button id="batchRestore" class="icon-btn-small" title="批量还原">↩</button>
+            <button id="deleteSelected" class="icon-btn-small danger" title="删除选中">×</button>
           </div>
         </div>
 
@@ -123,14 +128,22 @@
               <select id="editRecurrence" class="form-input">
                 <option value="none">不重复</option>
                 <option value="daily">每天</option>
+                <option value="workdays">工作日 (周一至周五)</option>
                 <option value="weekly">每周</option>
                 <option value="monthly">每月</option>
+                <option value="yearly">每年</option>
               </select>
             </div>
             <div class="form-group">
               <label>标签</label>
               <input id="editTags" class="form-input" placeholder="标签 (逗号分隔)">
             </div>
+          </div>
+          <div class="form-group">
+             <label>子任务</label>
+             <div id="subtaskContainer" class="subtask-container">
+               <!-- Dynamic Subtask Inputs will be rendered here -->
+             </div>
           </div>
         </div>
         <div class="modal-footer">

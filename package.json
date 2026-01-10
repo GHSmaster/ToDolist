@@ -13,7 +13,7 @@
     "appId": "com.todolist.app",
     "productName": "待办日历",
     "directories": {
-      "output": "dist-portable"
+      "output": "dist-green"
     },
     "asar": true,
     "files": [

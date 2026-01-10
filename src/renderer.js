@@ -12,6 +12,8 @@ const state = {
   isRangeMode: false
 }
 
+let currentSubtasks = []
+
 async function loadData() {
   const data = await window.api.getData()
   state.todos = data.todos || []
@@ -214,6 +216,7 @@ function toggleCalendar(force) {
 function getProjectedTodos(targetDateStr) {
   const targetDate = parseISO(targetDateStr)
   const projected = []
+  const projectedKeys = new Set() // Track unique keys to prevent duplication from multiple past tasks
   
   for (const t of state.todos) {
     if (t.done || !t.recurrence || t.recurrence === 'none') continue
@@ -223,11 +226,27 @@ function getProjectedTodos(targetDateStr) {
     // If it is same date, the real item exists
     if (startDate >= targetDate) continue 
     
+    // Check if a real item already exists for this date (prevent duplicates)
+    const existingReal = state.todos.find(existing => 
+        !existing.isVirtual &&
+        existing.date === targetDateStr &&
+        existing.title === t.title
+    )
+    if (existingReal) continue
+    
+    // Check if we already have a projection for this task (deduplication)
+    // Key: title + recurrence
+    const key = `${t.title}|${t.recurrence}`
+    if (projectedKeys.has(key)) continue
+    
     let matches = false
     const dayDiff = Math.floor((targetDate - startDate) / (1000 * 60 * 60 * 24))
     
     if (t.recurrence === 'daily') {
       matches = true
+    } else if (t.recurrence === 'workdays') {
+      const day = targetDate.getDay()
+      matches = (day !== 0 && day !== 6)
     } else if (t.recurrence === 'weekly') {
       matches = (dayDiff % 7 === 0)
     } else if (t.recurrence === 'monthly') {
@@ -237,6 +256,7 @@ function getProjectedTodos(targetDateStr) {
     }
     
     if (matches) {
+      projectedKeys.add(key)
       projected.push({
         ...t,
         date: targetDateStr,
@@ -367,6 +387,16 @@ function renderTodos() {
   
   // Sort: High priority first, then medium, then low. Done items last.
   const pMap = { high: 0, medium: 1, low: 2 }
+  
+  // Update Select All Button State
+  const realVisibleItems = items.filter(t => !t.isVirtual)
+  const allSelected = realVisibleItems.length > 0 && realVisibleItems.every(t => state.selectedIds.has(t.id))
+  const selectAllBtn = document.getElementById('selectAll')
+  if (selectAllBtn) {
+      selectAllBtn.textContent = allSelected ? '全不选' : '全选'
+      selectAllBtn.title = allSelected ? '取消全选' : '全选'
+  }
+
   items.sort((a, b) => {
     // If viewing completed, sort by date desc, else by priority
     if (state.showCompleted) return b.createdAt - a.createdAt
@@ -388,13 +418,28 @@ function renderTodos() {
     checkbox.type = 'checkbox'
     checkbox.checked = state.selectedIds.has(t.id)
     if (t.isVirtual) {
-        checkbox.disabled = true
-        checkbox.title = "这是重复事项的预览，请先完成前置任务或当天任务"
-    }
-    checkbox.onchange = e => {
-      e.stopPropagation()
-      if (e.target.checked) state.selectedIds.add(t.id)
-      else state.selectedIds.delete(t.id)
+        // Virtual Item Logic
+        checkbox.title = "点击激活此重复任务"
+        checkbox.onchange = async (e) => {
+             e.stopPropagation()
+             await window.api.addTodos([{
+                title: t.title,
+                date: t.date,
+                priority: t.priority,
+                recurrence: t.recurrence,
+                recurrenceId: t.recurrenceId,
+                tags: t.tags,
+                description: t.description,
+                subtasks: (t.subtasks || []).map(s => ({...s, done: false}))
+             }])
+             await loadData()
+        }
+    } else {
+        checkbox.onchange = e => {
+          e.stopPropagation()
+          if (e.target.checked) state.selectedIds.add(t.id)
+          else state.selectedIds.delete(t.id)
+        }
     }
     
     const content = document.createElement('div')
@@ -407,7 +452,7 @@ function renderTodos() {
     const meta = document.createElement('div')
     meta.className = 'meta'
     const pText = { high: '🔴', medium: '🔵', low: '⚪' }[t.priority || 'medium']
-    const rText = { daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年', none: '' }[t.recurrence || 'none']
+    const rText = { daily: '每天', workdays: '工作日', weekly: '每周', monthly: '每月', yearly: '每年', none: '' }[t.recurrence || 'none']
     
     let metaText = `${pText} ${rText ? '↻ ' + rText : ''}`
     if (state.showCompleted) metaText += ` ${t.date}`
@@ -508,6 +553,8 @@ function openModal(todo = null) {
     priorityInput.value = todo.priority || 'medium'
     recurrenceInput.value = todo.recurrence || 'none'
     tagsInput.value = (todo.tags || []).join(', ')
+    // Ensure we work with a copy
+    currentSubtasks = (todo.subtasks || []).map(s => ({...s}))
   } else {
     editingId = null
     modalTitle.textContent = '添加待办'
@@ -522,13 +569,98 @@ function openModal(todo = null) {
     priorityInput.value = 'medium'
     recurrenceInput.value = 'none'
     tagsInput.value = ''
+    currentSubtasks = []
+  }
+  
+  // Initialize with one empty subtask if empty
+  if (currentSubtasks.length === 0) {
+      currentSubtasks.push({ content: '', done: false })
   }
   
   modal.style.display = 'flex'
+  renderSubtaskInputs()
   titleInput.focus()
 }
 
-function closeModal() {
+function renderSubtaskInputs(focusIndex = -1) {
+  const container = document.getElementById('subtaskContainer')
+  container.innerHTML = ''
+  
+  currentSubtasks.forEach((sub, index) => {
+    const row = document.createElement('div')
+    row.className = 'subtask-edit-row'
+    
+    // Checkbox (Visual Toggle)
+    const checkbox = document.createElement('div')
+    checkbox.className = 'subtask-checkbox' + (sub.done ? ' checked' : '')
+    checkbox.onclick = () => {
+        sub.done = !sub.done
+        renderSubtaskInputs(index) // Re-render to update style
+    }
+    
+    // Input
+    const input = document.createElement('input')
+    input.className = 'subtask-input'
+    input.value = sub.content
+    input.placeholder = '输入子任务...'
+    input.oninput = (e) => {
+        sub.content = e.target.value
+    }
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault()
+            // Add new subtask after current
+            currentSubtasks.splice(index + 1, 0, { content: '', done: false })
+            renderSubtaskInputs(index + 1)
+        } else if (e.key === 'Backspace' && input.value === '') {
+            if (currentSubtasks.length > 1) {
+                e.preventDefault()
+                currentSubtasks.splice(index, 1)
+                renderSubtaskInputs(index - 1)
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            if (index > 0) focusInput(index - 1)
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            if (index < currentSubtasks.length - 1) focusInput(index + 1)
+        }
+    }
+    
+    // Delete Button (X)
+    const delBtn = document.createElement('button')
+    delBtn.className = 'subtask-del-btn'
+    delBtn.textContent = '×'
+    delBtn.tabIndex = -1
+    delBtn.onclick = () => {
+        if (currentSubtasks.length > 1) {
+            currentSubtasks.splice(index, 1)
+            renderSubtaskInputs(Math.max(0, index - 1))
+        } else {
+            // If only one, just clear it
+            sub.content = ''
+            sub.done = false
+            renderSubtaskInputs(0)
+        }
+    }
+    
+    row.appendChild(checkbox)
+    row.appendChild(input)
+    row.appendChild(delBtn)
+    container.appendChild(row)
+    
+    if (index === focusIndex) {
+        setTimeout(() => input.focus(), 0)
+    }
+  })
+}
+
+function focusInput(index) {
+    const inputs = document.querySelectorAll('.subtask-input')
+    if (inputs[index]) inputs[index].focus()
+}
+
+async function closeModal() {
   document.getElementById('todoModal').style.display = 'none'
   editingId = null
 }
@@ -542,7 +674,8 @@ async function saveModal() {
     return
   }
   
-  // Validation removed for description
+  // Filter out empty subtasks
+  const finalSubtasks = currentSubtasks.filter(s => s.content.trim() !== '')
   
   const date = document.getElementById('editDate').value
   const endDate = document.getElementById('editEndDate').value
@@ -550,7 +683,7 @@ async function saveModal() {
   const recurrence = document.getElementById('editRecurrence').value
   const tags = document.getElementById('editTags').value.split(/[,，]/).map(s => s.trim()).filter(Boolean)
   
-  if (editingId) {
+  if (editingId && !editingId.startsWith('virtual-')) {
     // Update
     await window.api.updateTodo({
       id: editingId,
@@ -560,7 +693,8 @@ async function saveModal() {
       endDate,
       priority,
       recurrence,
-      tags
+      tags,
+      subtasks: finalSubtasks
     })
   } else {
     // Add
@@ -571,7 +705,8 @@ async function saveModal() {
       endDate,
       priority,
       recurrence,
-      tags
+      tags,
+      subtasks: finalSubtasks
     }])
   }
   
@@ -583,6 +718,22 @@ async function deleteSelected() {
   const ids = Array.from(state.selectedIds)
   if (ids.length === 0) return
   await window.api.deleteTodos(ids)
+  state.selectedIds.clear()
+  await loadData()
+}
+
+async function batchComplete() {
+  const ids = Array.from(state.selectedIds)
+  if (ids.length === 0) return
+  await window.api.batchComplete(ids)
+  state.selectedIds.clear()
+  await loadData()
+}
+
+async function batchRestore() {
+  const ids = Array.from(state.selectedIds)
+  if (ids.length === 0) return
+  await window.api.batchRestore(ids)
   state.selectedIds.clear()
   await loadData()
 }
@@ -620,7 +771,14 @@ function selectAll() {
     })
   }
   
-  state.selectedIds = new Set(items.map(t => t.id))
+  const allSelected = items.length > 0 && items.every(t => state.selectedIds.has(t.id))
+  
+  if (allSelected) {
+      items.forEach(t => state.selectedIds.delete(t.id))
+  } else {
+      items.forEach(t => state.selectedIds.add(t.id))
+  }
+  
   renderTodos()
 }
 
@@ -635,6 +793,8 @@ function bindControls() {
   }
   
   document.getElementById('deleteSelected').onclick = deleteSelected
+  document.getElementById('batchComplete').onclick = batchComplete
+  document.getElementById('batchRestore').onclick = batchRestore
   document.getElementById('selectAll').onclick = selectAll
   
   // FAB Add
@@ -694,10 +854,8 @@ function bindControls() {
   }
 
   // New controls
-  document.getElementById('viewToggle').onclick = () => {
-    state.showCompleted = !state.showCompleted
-    document.getElementById('viewToggle').textContent = state.showCompleted ? '待办' : '已完成'
-    document.getElementById('viewToggle').classList.toggle('active', state.showCompleted)
+  document.getElementById('filterStatus').onchange = (e) => {
+    state.showCompleted = e.target.value === 'completed'
     // Hide add button in completed view
     document.querySelector('.bottom-area').style.display = state.showCompleted ? 'none' : 'flex'
     renderTodos()

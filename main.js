@@ -5,6 +5,23 @@ const fs = require('fs')
 // 禁用硬件加速，解决透明窗口可能出现的黑屏或渲染问题
 app.disableHardwareAcceleration()
 
+// 单实例锁定，防止同时启动多个进程
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  app.quit()
+  return
+}
+
+app.on('second-instance', (event, commandLine, workingDirectory) => {
+  // 用户尝试运行第二个实例，我们应该聚焦到现有窗口
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+})
+
 let mainWindow
 let tray = null
 let dataFilePath
